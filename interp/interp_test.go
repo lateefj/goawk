@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
@@ -1002,6 +1003,44 @@ func TestSafeMode(t *testing.T) {
 				config.NoFileReads = true
 			})
 		})
+	}
+}
+func TestRuntimeLimit(t *testing.T) {
+	tests := []struct {
+		src  string
+		in   string
+		out  string
+		err  string
+		args []string
+	}{
+		{`BEGIN { print "hi" }`, "", "hi\n", "", nil},
+		{`BEGIN { while(i<1){} }`, "", "", "Runtime exceeded limit of 5ms", nil},
+		{`BEGIN { while(i<1){i++} }`, "", "", "", nil},
+		{`BEGIN { while(1){} }`, "", "", "Runtime exceeded limit of 5ms", nil},
+	}
+	for _, test := range tests {
+		testName := test.src
+		if len(testName) > 70 {
+			testName = testName[:70]
+		}
+		timeout := 5 * time.Millisecond
+		testRun := make(chan bool, 0)
+		go func() {
+			t.Run(testName, func(t *testing.T) {
+				testGoAWK(t, test.src, test.in, test.out, test.err, nil, func(config *interp.Config) {
+					config.Args = test.args
+					config.RuntimeLimit = timeout
+				})
+			})
+			testRun <- true
+		}()
+
+		select {
+		case <-testRun:
+			break
+		case <-time.After(timeout):
+			t.Errorf("Failed to stop runtime in %v: %s", timeout, test.src)
+		}
 	}
 }
 

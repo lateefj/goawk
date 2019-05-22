@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	. "github.com/benhoyt/goawk/internal/ast"
 	. "github.com/benhoyt/goawk/lexer"
@@ -77,6 +78,10 @@ type interp struct {
 	noExec        bool
 	noFileWrites  bool
 	noFileReads   bool
+	// limited the amount of runtime
+	runtimeLimit time.Duration
+	// Time of whn
+	startTime time.Time
 
 	// Scalars, arrays, and function state
 	globals     []value
@@ -192,6 +197,9 @@ type Config struct {
 	NoExec       bool
 	NoFileWrites bool
 	NoFileReads  bool
+
+	// RuntimeLimit is the limit of the amount of time a single program can run
+	RuntimeLimit time.Duration
 }
 
 // ExecProgram executes the parsed program using the given interpreter
@@ -229,6 +237,10 @@ func ExecProgram(program *Program, config *Config) (int, error) {
 	p.noExec = config.NoExec
 	p.noFileWrites = config.NoFileWrites
 	p.noFileReads = config.NoFileReads
+	p.runtimeLimit = config.RuntimeLimit
+	if p.runtimeLimit > 0 {
+		p.startTime = time.Now()
+	}
 	err := p.initNativeFuncs(config.Funcs)
 	if err != nil {
 		return 0, err
@@ -271,8 +283,11 @@ func ExecProgram(program *Program, config *Config) (int, error) {
 	p.scanners = make(map[string]*bufio.Scanner)
 	defer p.closeAll()
 
+	return execProgram(p, program)
+}
+func execProgram(p *interp, program *Program) (int, error) {
 	// Execute the program! BEGIN, then pattern/actions, then END
-	err = p.execBeginEnd(program.Begin)
+	err := p.execBeginEnd(program.Begin)
 	if err != nil && err != errExit {
 		return 0, err
 	}
@@ -410,6 +425,11 @@ func (p *interp) executes(stmts Stmts) error {
 
 // Execute a single statement
 func (p *interp) execute(stmt Stmt) error {
+	// Check runtime limit
+	if runtimeError := p.exceedsRuntimeLimit(); runtimeError != nil {
+		return runtimeError
+	}
+
 	switch s := stmt.(type) {
 	case *ExprStmt:
 		// Expression statement: simply throw away the expression value
@@ -635,8 +655,23 @@ func (p *interp) execute(stmt Stmt) error {
 	return nil
 }
 
+// Check runtime limitations
+func (p *interp) exceedsRuntimeLimit() error {
+	if p.runtimeLimit > 0 {
+		if p.runtimeLimit < time.Since(p.startTime) {
+			return fmt.Errorf("Runtime exceeded limit of %v", p.runtimeLimit)
+		}
+	}
+	return nil
+}
+
 // Evaluate a single expression, return expression value and error
 func (p *interp) eval(expr Expr) (value, error) {
+	// Check runtime limit
+	if runtimeError := p.exceedsRuntimeLimit(); runtimeError != nil {
+		return num(1), runtimeError
+	}
+
 	switch e := expr.(type) {
 	case *NumExpr:
 		// Number literal
