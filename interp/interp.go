@@ -59,13 +59,20 @@ func (r returnValue) Error() string {
 	return "<return " + r.Value.str("%.6g") + ">"
 }
 
+// Provide way to populate different data formats with different contexts
+type dataScanner interface {
+	scan() bool
+	// Get the next data record and populate the proper context
+	next(*interp) error
+}
+
 type interp struct {
 	// Input/output
 	output        io.Writer
 	flushOutput   bool
 	errorOutput   io.Writer
 	flushError    bool
-	scanner       *bufio.Scanner
+	scanner       dataScanner
 	scanners      map[string]*bufio.Scanner
 	stdin         io.Reader
 	filenameIndex int
@@ -327,15 +334,14 @@ func (p *interp) execActions(actions []Action) error {
 	inRange := make([]bool, len(actions))
 lineLoop:
 	for {
-		// Read and setup next line of input
-		line, err := p.nextLine()
+		// Read the next line
+		err := p.scanner.next(p)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return err
 		}
-		p.setLine(line)
 
 		// Execute all the pattern-action blocks for each line
 		for i, action := range actions {

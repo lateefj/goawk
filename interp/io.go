@@ -10,11 +10,28 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	. "github.com/benhoyt/goawk/internal/ast"
 	. "github.com/benhoyt/goawk/lexer"
+)
+
+// field separator type
+type fieldSeperator string
+
+// record separator type
+type recordSeperator string
+
+const (
+	// Set list of constant fields separators
+	fieldSeperatorSpace fieldSeperator = " "
+	fieldSeperatorEmpty fieldSeperator = ""
+	fieldSeperatorJson  fieldSeperator = "JSON"
+
+	// Set list of constant record separators
+	recordSeperatorNewLine recordSeperator = "\n"
+	recordSeperatorEmpty   recordSeperator = ""
+	recordSeperatorJson    recordSeperator = "JSON"
 )
 
 // Print a line of output followed by a newline
@@ -167,10 +184,10 @@ func (p *interp) getInputScannerPipe(name string) (*bufio.Scanner, error) {
 // Create a new buffered Scanner for reading input records
 func (p *interp) newScanner(input io.Reader) *bufio.Scanner {
 	scanner := bufio.NewScanner(input)
-	switch p.recordSep {
-	case "\n":
+	switch recordSeperator(p.recordSep) {
+	case recordSeperatorNewLine:
 		// Scanner default is to split on newlines
-	case "":
+	case recordSeperatorEmpty:
 		// Empty string for RS means split on \n\n (blank lines)
 		scanner.Split(scanLinesBlank)
 	default:
@@ -287,7 +304,9 @@ func (p *interp) ensureFields() {
 	}
 	p.haveFields = true
 
-	if p.fieldSep == " " {
+	if fieldSeperator(p.fieldSep) == fieldSeperatorJson {
+		p.fields = nil
+	} else if fieldSeperator(p.fieldSep) == fieldSeperatorSpace {
 		// FS space (default) means split fields on any whitespace
 		p.fields = strings.Fields(p.line)
 	} else if p.line == "" {
@@ -312,85 +331,6 @@ func (p *interp) ensureFields() {
 		}
 	}
 	p.numFields = len(p.fields)
-}
-
-// Fetch next line (record) of input from current input file, opening
-// next input file if done with previous one
-func (p *interp) nextLine() (string, error) {
-	for {
-		if p.scanner == nil {
-			if prevInput, ok := p.input.(io.Closer); ok && p.input != p.stdin {
-				// Previous input is file, close it
-				prevInput.Close()
-			}
-			if p.filenameIndex >= p.argc && !p.hadFiles {
-				// Moved past number of ARGV args and haven't seen
-				// any files yet, use stdin
-				p.input = p.stdin
-				p.setFile("")
-				p.hadFiles = true
-			} else {
-				if p.filenameIndex >= p.argc {
-					// Done with ARGV args, all done with input
-					return "", io.EOF
-				}
-				// Fetch next filename from ARGV. Can't use
-				// getArrayValue() here as it would set the value if
-				// not present
-				index := strconv.Itoa(p.filenameIndex)
-				argvIndex := p.program.Arrays["ARGV"]
-				argvArray := p.arrays[p.getArrayIndex(ScopeGlobal, argvIndex)]
-				filename := p.toString(argvArray[index])
-				p.filenameIndex++
-
-				// Is it actually a var=value assignment?
-				matches := varRegex.FindStringSubmatch(filename)
-				if len(matches) >= 3 {
-					// Yep, set variable to value and keep going
-					err := p.setVarByName(matches[1], matches[2])
-					if err != nil {
-						return "", err
-					}
-					continue
-				} else if filename == "" {
-					// ARGV arg is empty string, skip
-					p.input = nil
-					continue
-				} else if filename == "-" {
-					// ARGV arg is "-" meaning stdin
-					p.input = p.stdin
-					p.setFile("")
-				} else {
-					// A regular file name, open it
-					if p.noFileReads {
-						return "", newError("can't read from file due to NoFileReads")
-					}
-					input, err := os.Open(filename)
-					if err != nil {
-						return "", err
-					}
-					p.input = input
-					p.setFile(filename)
-					p.hadFiles = true
-				}
-			}
-			p.scanner = p.newScanner(p.input)
-		}
-		if p.scanner.Scan() {
-			// We scanned some input, break and return it
-			break
-		}
-		if err := p.scanner.Err(); err != nil {
-			return "", fmt.Errorf("error reading from input: %s", err)
-		}
-		// Signal loop to move onto next file
-		p.scanner = nil
-	}
-
-	// Got a line (record) of input, return it
-	p.lineNum++
-	p.fileLineNum++
-	return p.scanner.Text(), nil
 }
 
 // Write output string to given writer, producing correct line endings
