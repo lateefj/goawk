@@ -2,19 +2,54 @@ package interp
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
+
+	"github.com/benhoyt/goawk/internal/ast"
 )
 
+// Provide way to populate different data formats with different contexts
+type dataScanner interface {
+	//scan() bool
+	// Get the next data record and populate the proper context
+	next(*interp) error
+}
+
 type textScanner struct {
-	input   io.Reader
 	scanner *bufio.Scanner
 }
 
+func initTextScanner(rc recordSeperator, input io.Reader) (*bufio.Scanner, error) {
+	if input == nil {
+		return nil, fmt.Errorf("textScanner input reader can not be nil")
+	}
+	scanner := bufio.NewScanner(input)
+	switch recordSeperator(rc) {
+	case recordSeperatorNewLine:
+		// Scanner default is to split on newlines
+	case recordSeperatorEmpty:
+		// Empty string for RS means split on \n\n (blank lines)
+		scanner.Split(scanLinesBlank)
+	default:
+		splitter := byteSplitter{rc[0]}
+		scanner.Split(splitter.scan)
+	}
+	buffer := make([]byte, inputBufSize)
+	scanner.Buffer(buffer, maxRecordLength)
+	return scanner, nil
+}
+func newTextScanner(rc recordSeperator, input io.Reader) (*textScanner, error) {
+	scanner, err := initTextScanner(rc, input)
+	if err != nil {
+		return nil, err
+	}
+	return &textScanner{scanner}, nil
+}
+
 func (ts *textScanner) next(p *interp) error {
-	ts.currentError = nil
 	for {
 		if ts.scanner == nil {
 			if prevInput, ok := p.input.(io.Closer); ok && p.input != p.stdin {
@@ -37,7 +72,7 @@ func (ts *textScanner) next(p *interp) error {
 				// not present
 				index := strconv.Itoa(p.filenameIndex)
 				argvIndex := p.program.Arrays["ARGV"]
-				argvArray := p.arrays[p.getArrayIndex(ScopeGlobal, argvIndex)]
+				argvArray := p.arrays[p.getArrayIndex(ast.ScopeGlobal, argvIndex)]
 				filename := p.toString(argvArray[index])
 				p.filenameIndex++
 
@@ -65,14 +100,18 @@ func (ts *textScanner) next(p *interp) error {
 					}
 					input, err := os.Open(filename)
 					if err != nil {
-						ts.currentError = err
+						return err
 					}
 					p.input = input
 					p.setFile(filename)
 					p.hadFiles = true
 				}
 			}
-			ts.scanner = ts.newScanner(ts.input)
+			var err error
+			ts.scanner, err = initTextScanner(p.recordSep, p.input)
+			if err != nil {
+				return err
+			}
 		}
 		if ts.scanner.Scan() {
 			// We scanned some input, break and return it
@@ -89,4 +128,35 @@ func (ts *textScanner) next(p *interp) error {
 	p.lineNum++
 	p.fileLineNum++
 	p.setLine(ts.scanner.Text())
+	return nil
+}
+
+type jsonScanner struct {
+	decoder *json.Decoder
+}
+
+func newJsonScanner(input io.Reader) *jsonScanner {
+	dec := json.NewDecoder(input)
+	return &jsonScanner{dec}
+
+}
+func (js *jsonScanner) next(p *interp) error {
+	var v interface{}
+	err := js.decoder.Decode(&v)
+	if err != nil {
+		return err
+	}
+	// Convert to map of string interface
+	m := v.(map[string]interface{})
+	p.jsonPayload = m
+
+	return nil
+}
+func newDataScanner(rc recordSeperator, input io.Reader) (dataScanner, error) {
+	switch rc {
+	case recordSeperatorJson:
+		return newJsonScanner(input), nil
+	default:
+		return newTextScanner(rc, input)
+	}
 }

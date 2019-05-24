@@ -59,13 +59,6 @@ func (r returnValue) Error() string {
 	return "<return " + r.Value.str("%.6g") + ">"
 }
 
-// Provide way to populate different data formats with different contexts
-type dataScanner interface {
-	scan() bool
-	// Get the next data record and populate the proper context
-	next(*interp) error
-}
-
 type interp struct {
 	// Input/output
 	output        io.Writer
@@ -84,6 +77,8 @@ type interp struct {
 	noExec        bool
 	noFileWrites  bool
 	noFileReads   bool
+
+	jsonPayload map[string]interface{}
 
 	// Scalars, arrays, and function state
 	globals     []value
@@ -109,7 +104,7 @@ type interp struct {
 	outputFormat    string
 	fieldSep        string
 	fieldSepRegex   *regexp.Regexp
-	recordSep       string
+	recordSep       recordSeperator
 	outputFieldSep  string
 	outputRecordSep string
 	subscriptSep    string
@@ -141,6 +136,8 @@ const (
 
 // Config defines the interpreter configuration for ExecProgram.
 type Config struct {
+	// Record type for reading
+	RecordSeperator recordSeperator
 	// Standard input reader (defaults to os.Stdin)
 	Stdin io.Reader
 
@@ -229,7 +226,11 @@ func ExecProgram(program *Program, config *Config) (int, error) {
 	p.convertFormat = "%.6g"
 	p.outputFormat = "%.6g"
 	p.fieldSep = " "
-	p.recordSep = "\n"
+	if config.RecordSeperator != recordSeperatorEmpty {
+		p.recordSep = config.RecordSeperator
+	} else {
+		p.recordSep = recordSeperatorNewLine
+	}
 	p.outputFieldSep = " "
 	p.outputRecordSep = "\n"
 	p.subscriptSep = "\x1c"
@@ -334,6 +335,17 @@ func (p *interp) execActions(actions []Action) error {
 	inRange := make([]bool, len(actions))
 lineLoop:
 	for {
+		if p.scanner == nil {
+			input := p.input
+			if input == nil {
+				input = p.stdin
+			}
+			var err error
+			p.scanner, err = newDataScanner(p.recordSep, input)
+			if err != nil {
+				return err
+			}
+		}
 		// Read the next line
 		err := p.scanner.next(p)
 		if err == io.EOF {
@@ -859,7 +871,7 @@ func (p *interp) eval(expr Expr) (value, error) {
 			line = scanner.Text()
 		default:
 			var err error
-			line, err = p.nextLine()
+			err = p.scanner.next(p)
 			if err == io.EOF {
 				return num(0), nil
 			}
@@ -954,7 +966,7 @@ func (p *interp) getVar(scope VarScope, index int) value {
 		case V_ORS:
 			return str(p.outputRecordSep)
 		case V_RS:
-			return str(p.recordSep)
+			return str(string(p.recordSep))
 		case V_SUBSEP:
 			return str(p.subscriptSep)
 		default:
@@ -1044,7 +1056,7 @@ func (p *interp) setVar(scope VarScope, index int, v value) error {
 			if len(sep) > 1 {
 				return newError("RS must be at most 1 char")
 			}
-			p.recordSep = sep
+			p.recordSep = recordSeperator(sep)
 		case V_SUBSEP:
 			p.subscriptSep = p.toString(v)
 		default:

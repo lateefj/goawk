@@ -25,6 +25,7 @@ func (p *interp) callBuiltin(op Token, argExprs []Expr) (value, error) {
 	// split() has an array arg (not evaluated) and [g]sub() have an
 	// lvalue arg, so handle them as special cases
 	switch op {
+
 	case F_SPLIT:
 		strValue, err := p.eval(argExprs[0])
 		if err != nil {
@@ -97,6 +98,23 @@ func (p *interp) callBuiltin(op Token, argExprs []Expr) (value, error) {
 
 	// Then switch on the function for the ordinary functions
 	switch op {
+	case F_JSON:
+		if p.jsonPayload == nil {
+			return null(), fmt.Errorf("Field not found")
+		}
+		key := p.toString(args[0])
+		value, exists := p.jsonPayload[key]
+		if !exists || value == nil {
+			return null(), nil
+		}
+		switch vv := value.(type) {
+		case string:
+			return str(vv), nil
+		case float64:
+		case int64:
+		case int32:
+			return num(float64(vv)), nil
+		}
 	case F_LENGTH:
 		switch len(args) {
 		case 0:
@@ -245,6 +263,7 @@ func (p *interp) callBuiltin(op Token, argExprs []Expr) (value, error) {
 		// Shouldn't happen
 		panic(fmt.Sprintf("unexpected function: %s", op))
 	}
+	return null(), nil
 }
 
 // Call user-defined function with given index and arguments, return

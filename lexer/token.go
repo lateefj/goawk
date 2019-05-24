@@ -94,6 +94,7 @@ const (
 	F_SYSTEM
 	F_TOLOWER
 	F_TOUPPER
+	F_JSON
 
 	// Literals and names (variables and arrays)
 	NAME
@@ -147,6 +148,7 @@ var keywordTokens = map[string]Token{
 	"system":  F_SYSTEM,
 	"tolower": F_TOLOWER,
 	"toupper": F_TOUPPER,
+	"JSON":    F_JSON,
 }
 
 // KeywordToken returns the token associated with the given keyword
@@ -241,6 +243,7 @@ var tokenNames = map[Token]string{
 	F_SYSTEM:  "system",
 	F_TOLOWER: "tolower",
 	F_TOUPPER: "toupper",
+	F_JSON:    "JSON",
 
 	NAME:   "name",
 	NUMBER: "number",

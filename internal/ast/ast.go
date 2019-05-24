@@ -71,6 +71,7 @@ func (e *CallExpr) expr()      {}
 func (e *UserCallExpr) expr()  {}
 func (e *MultiExpr) expr()     {}
 func (e *GetlineExpr) expr()   {}
+func (e *JsonExpr) expr()      {}
 
 // Field expression like $0.
 type FieldExpr struct {
@@ -313,6 +314,17 @@ func (e *GetlineExpr) String() string {
 		s += " <" + e.File.String()
 	}
 	return s
+}
+
+// Json reference.
+type JsonExpr struct {
+	Scope VarScope
+	Index int
+	Name  string
+}
+
+func (e *JsonExpr) String() string {
+	return e.Name
 }
 
 // IsLValue returns true if the given expression can be used as an
