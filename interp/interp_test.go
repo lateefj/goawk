@@ -1005,6 +1005,30 @@ func TestSafeMode(t *testing.T) {
 	}
 }
 
+func TestJsonFormat(t *testing.T) {
+	tests := []struct {
+		src  string
+		in   string
+		out  string
+		err  string
+		args []string
+	}{
+		{`{ print JSON("foo")  }`, "{\"foo\":1}", "1", "", nil},
+	}
+	for _, test := range tests {
+		testName := test.src
+		if len(testName) > 70 {
+			testName = testName[:70]
+		}
+		t.Run(testName, func(t *testing.T) {
+			testGoAWK(t, test.src, test.in, test.out, test.err, nil, func(config *interp.Config) {
+				config.Args = test.args
+				config.RecordSeperator = interp.RecordSeperatorJson
+			})
+		})
+	}
+}
+
 func TestConfigVarsCorrect(t *testing.T) {
 	prog, err := parser.ParseProgram([]byte(`BEGIN { print x }`), nil)
 	if err != nil {

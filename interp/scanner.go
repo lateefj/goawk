@@ -22,15 +22,15 @@ type textScanner struct {
 	scanner *bufio.Scanner
 }
 
-func initTextScanner(rc recordSeperator, input io.Reader) (*bufio.Scanner, error) {
+func initTextScanner(rc RecordSeperator, input io.Reader) (*bufio.Scanner, error) {
 	if input == nil {
 		return nil, fmt.Errorf("textScanner input reader can not be nil")
 	}
 	scanner := bufio.NewScanner(input)
-	switch recordSeperator(rc) {
-	case recordSeperatorNewLine:
+	switch RecordSeperator(rc) {
+	case RecordSeperatorNewLine:
 		// Scanner default is to split on newlines
-	case recordSeperatorEmpty:
+	case RecordSeperatorEmpty:
 		// Empty string for RS means split on \n\n (blank lines)
 		scanner.Split(scanLinesBlank)
 	default:
@@ -41,7 +41,7 @@ func initTextScanner(rc recordSeperator, input io.Reader) (*bufio.Scanner, error
 	scanner.Buffer(buffer, maxRecordLength)
 	return scanner, nil
 }
-func newTextScanner(rc recordSeperator, input io.Reader) (*textScanner, error) {
+func newTextScanner(rc RecordSeperator, input io.Reader) (*textScanner, error) {
 	scanner, err := initTextScanner(rc, input)
 	if err != nil {
 		return nil, err
@@ -135,9 +135,12 @@ type jsonScanner struct {
 	decoder *json.Decoder
 }
 
-func newJsonScanner(input io.Reader) *jsonScanner {
+func newJsonScanner(input io.Reader) (*jsonScanner, error) {
+	if input == nil {
+		return nil, fmt.Errorf("Json Scanner input can not be nil")
+	}
 	dec := json.NewDecoder(input)
-	return &jsonScanner{dec}
+	return &jsonScanner{dec}, nil
 
 }
 func (js *jsonScanner) next(p *interp) error {
@@ -146,16 +149,20 @@ func (js *jsonScanner) next(p *interp) error {
 	if err != nil {
 		return err
 	}
+	if v == nil {
+		p.jsonPayload = nil
+		return nil
+	}
 	// Convert to map of string interface
 	m := v.(map[string]interface{})
 	p.jsonPayload = m
 
 	return nil
 }
-func newDataScanner(rc recordSeperator, input io.Reader) (dataScanner, error) {
+func newDataScanner(rc RecordSeperator, input io.Reader) (dataScanner, error) {
 	switch rc {
-	case recordSeperatorJson:
-		return newJsonScanner(input), nil
+	case RecordSeperatorJson:
+		return newJsonScanner(input)
 	default:
 		return newTextScanner(rc, input)
 	}

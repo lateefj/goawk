@@ -361,6 +361,7 @@ func (s *ExitStmt) stmt()     {}
 func (s *DeleteStmt) stmt()   {}
 func (s *ReturnStmt) stmt()   {}
 func (s *BlockStmt) stmt()    {}
+func (s *JsonExpr) stmt()     {}
 
 // Print statement like print $1, $3.
 type PrintStmt struct {

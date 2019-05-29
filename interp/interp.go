@@ -104,7 +104,7 @@ type interp struct {
 	outputFormat    string
 	fieldSep        string
 	fieldSepRegex   *regexp.Regexp
-	recordSep       recordSeperator
+	recordSep       RecordSeperator
 	outputFieldSep  string
 	outputRecordSep string
 	subscriptSep    string
@@ -137,7 +137,7 @@ const (
 // Config defines the interpreter configuration for ExecProgram.
 type Config struct {
 	// Record type for reading
-	RecordSeperator recordSeperator
+	RecordSeperator RecordSeperator
 	// Standard input reader (defaults to os.Stdin)
 	Stdin io.Reader
 
@@ -226,10 +226,10 @@ func ExecProgram(program *Program, config *Config) (int, error) {
 	p.convertFormat = "%.6g"
 	p.outputFormat = "%.6g"
 	p.fieldSep = " "
-	if config.RecordSeperator != recordSeperatorEmpty {
+	if config.RecordSeperator != RecordSeperatorEmpty {
 		p.recordSep = config.RecordSeperator
 	} else {
-		p.recordSep = recordSeperatorNewLine
+		p.recordSep = RecordSeperatorNewLine
 	}
 	p.outputFieldSep = " "
 	p.outputRecordSep = "\n"
@@ -969,6 +969,8 @@ func (p *interp) getVar(scope VarScope, index int) value {
 			return str(string(p.recordSep))
 		case V_SUBSEP:
 			return str(p.subscriptSep)
+		case V_JSON:
+			return 
 		default:
 			panic(fmt.Sprintf("unexpected special variable index: %d", index))
 		}
@@ -1056,7 +1058,7 @@ func (p *interp) setVar(scope VarScope, index int, v value) error {
 			if len(sep) > 1 {
 				return newError("RS must be at most 1 char")
 			}
-			p.recordSep = recordSeperator(sep)
+			p.recordSep = RecordSeperator(sep)
 		case V_SUBSEP:
 			p.subscriptSep = p.toString(v)
 		default:

@@ -17,21 +17,21 @@ import (
 )
 
 // field separator type
-type fieldSeperator string
+type FieldSeperator string
 
 // record separator type
-type recordSeperator string
+type RecordSeperator string
 
 const (
 	// Set list of constant fields separators
-	fieldSeperatorSpace fieldSeperator = " "
-	fieldSeperatorEmpty fieldSeperator = ""
-	fieldSeperatorJson  fieldSeperator = "JSON"
+	FieldSeperatorSpace FieldSeperator = " "
+	FieldSeperatorEmpty FieldSeperator = ""
+	FieldSeperatorJson  FieldSeperator = "JSON"
 
 	// Set list of constant record separators
-	recordSeperatorNewLine recordSeperator = "\n"
-	recordSeperatorEmpty   recordSeperator = ""
-	recordSeperatorJson    recordSeperator = "JSON"
+	RecordSeperatorNewLine RecordSeperator = "\n"
+	RecordSeperatorEmpty   RecordSeperator = ""
+	RecordSeperatorJson    RecordSeperator = "JSON"
 )
 
 // Print a line of output followed by a newline
@@ -184,10 +184,10 @@ func (p *interp) getInputScannerPipe(name string) (*bufio.Scanner, error) {
 // Create a new buffered Scanner for reading input records
 func (p *interp) newScanner(input io.Reader) *bufio.Scanner {
 	scanner := bufio.NewScanner(input)
-	switch recordSeperator(p.recordSep) {
-	case recordSeperatorNewLine:
+	switch RecordSeperator(p.recordSep) {
+	case RecordSeperatorNewLine:
 		// Scanner default is to split on newlines
-	case recordSeperatorEmpty:
+	case RecordSeperatorEmpty:
 		// Empty string for RS means split on \n\n (blank lines)
 		scanner.Split(scanLinesBlank)
 	default:
@@ -304,9 +304,9 @@ func (p *interp) ensureFields() {
 	}
 	p.haveFields = true
 
-	if fieldSeperator(p.fieldSep) == fieldSeperatorJson {
+	if FieldSeperator(p.fieldSep) == FieldSeperatorJson {
 		p.fields = nil
-	} else if fieldSeperator(p.fieldSep) == fieldSeperatorSpace {
+	} else if FieldSeperator(p.fieldSep) == FieldSeperatorSpace {
 		// FS space (default) means split fields on any whitespace
 		p.fields = strings.Fields(p.line)
 	} else if p.line == "" {

@@ -18,6 +18,7 @@ const (
 	V_RS
 	V_RSTART
 	V_SUBSEP
+	V_JSON
 
 	V_LAST = V_SUBSEP
 )
@@ -37,6 +38,7 @@ var specialVars = map[string]int{
 	"RS":       V_RS,
 	"RSTART":   V_RSTART,
 	"SUBSEP":   V_SUBSEP,
+	"JSON":     V_JSON,
 }
 
 // SpecialVarIndex returns the "index" of the special variable, or 0
